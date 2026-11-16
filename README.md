@@ -133,7 +133,8 @@ alembic revision --autogenerate -m "..."   # новая миграция пос�
 | `POST` | `/api/campaigns/{id}/flows/{stream_id}/offers` | добавить оффер |
 | `DELETE` | `/api/campaigns/{id}/flows/{stream_id}/offers/{offer_id}` | удалить оффер |
 | `GET` | `/api/logs?limit=` | журнал операций |
-| `GET` | `/health`, `/api/health` | проверка живости |
+| `GET` | `/api/statistics` | сводка по локальному зеркалу БД |
+| `GET` | `/api/health` | проверка живости и наличия ключа |
 
 Пример создания кампании:
 
