@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Keitaro Campaign Manager</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">K</span> Keitaro <b>Campaign Manager</b></div>
+  <div class="topbar-right">
+    <span class="hint">префикс: <code>{{ prefix }}</code></span>
+    <span id="apiStatus" class="pill pill-muted">API: проверка…</span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <a href="#/campaigns" data-tab="campaigns" class="active">Кампании</a>
+  <a href="#/logs" data-tab="logs">Журнал API</a>
+</nav>
+
+<main>
+  <section id="view-campaigns" class="view">
+    <div class="toolbar">
+      <input id="searchInput" class="input" placeholder="Поиск по названию…" autocomplete="off">
+      <label class="switch"><input type="checkbox" id="onlyOurs" checked> только наши</label>
+      <button id="refreshBtn" class="btn">Обновить</button>
+      <button id="newCampaignBtn" class="btn btn-primary">＋ Создать кампанию</button>
+    </div>
+
+    <form id="createForm" class="card create hidden" autocomplete="off">
+      <div class="card-head">
+        <h2>Новая кампания</h2>
+        <p class="muted">Создаём кампанию + 2 потока: «Google» (гео → редирект) и «Offers» (оффер).</p>
+      </div>
+      <div class="grid">
+        <label class="field">
+          <span>Название</span>
+          <input name="name" class="input" placeholder="campaign1" required>
+          <small class="muted">префикс <code>{{ prefix }}</code> добавится автоматически</small>
+        </label>
+        <label class="field">
+          <span>Гео (ISO-код)</span>
+          <input name="geo" class="input" placeholder="AU" required>
+          <small class="muted">можно несколько: <code>AU, RO, DE</code></small>
+        </label>
+        <label class="field">
+          <span>Оффер</span>
+          <input name="offer" class="input" list="offersList" placeholder="id или название" required>
+          <datalist id="offersList"></datalist>
+        </label>
+        <label class="field">
+          <span>Домен</span>
+          <select name="domain_id" class="input"></select>
+        </label>
+        <label class="field">
+          <span>Группа</span>
+          <select name="group_id" class="input"></select>
+          <button type="button" class="btn btn-ghost btn-sm" data-create="groups">＋ создать группу</button>
+        </label>
+        <label class="field">
+          <span>Источник трафика</span>
+          <select name="traffic_source_id" class="input"></select>
+          <button type="button" class="btn btn-ghost btn-sm" data-create="sources">＋ создать источник</button>
+        </label>
+      </div>
+      <div class="geo-quick" id="geoQuick"></div>
+      <div class="card-actions">
+        <button type="submit" class="btn btn-primary" id="createSubmit">Создать кампанию</button>
+        <button type="button" class="btn" id="createCancel">Отмена</button>
+      </div>
+    </form>
+
+    <div class="card table-wrap" id="campaignsWrap">
+      <div class="empty">Загрузка…</div>
+    </div>
+  </section>
+
+  <section id="view-campaign" class="view hidden"></section>
+
+  <section id="view-logs" class="view hidden">
+    <div class="toolbar">
+      <button id="refreshLogs" class="btn">Обновить журнал</button>
+      <span class="muted">все вызовы Keitaro, которые сделало приложение</span>
+    </div>
+    <div class="card table-wrap" id="logsWrap"><div class="empty">Загрузка…</div></div>
+  </section>
+</main>
+
+<div id="toasts" class="toasts"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
