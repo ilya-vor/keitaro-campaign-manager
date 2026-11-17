@@ -1,149 +1,84 @@
 # Keitaro Campaign Manager
 
 Веб-обёртка над **Keitaro Admin API v1**: создание трекинг-кампаний «в один клик» и редактор офферов
-для уже существующих кампаний. Тестовое задание для позиции Fullstack (Python/Node.js).
+существующих кампаний. Тестовое задание для позиции Fullstack (Python/Node.js).
 
-Что умеет:
+1. **Создание кампании** — принимает название, гео-код и ID оффера, а в Keitaro создаёт кампанию и два потока:
+   * «Google» — все посетители из указанной страны (`country` = `accept`) редиректятся на `https://www.google.com/`
+     (`schema: redirect`, задан `action_options.url`);
+   * «Offers» — выбранному офферу 100 % трафика (`schema: landings`, `offers[]`).
+   Домен, группа и источник трафика тоже проставляются через API.
+2. **Редактор офферов** — добавить / удалить оффер, поменять веса (share, сумма нормализуется к 100 %),
+   с показом реальных цифр (клики / уникальные / боты) из Keitaro.
 
-1. **Создание кампании** — принимает название, гео-код страны и ID оффера, а на стороне Keitaro создаёт
-   кампанию и **два потока**:
-   * поток №1 «Google» — ловит **всех посетителей из указанной страны** (фильтр `country` = `accept`) и
-     редиректит на `https://www.google.com/` (`schema: redirect`, `action_type: http`, задан `action_options.url`);
-   * поток №2 «Offers» — отдаёт выбранному офферу 100 % трафика (`schema: landings`, `offers[]`).
-   Домен, группа кампаний и источник трафика тоже проставляются через API.
-2. **Редактор офферов существующей кампании** — добавить / удалить оффер, поменять веса (share),
-   с валидацией суммы в 100 % и с показом реальных цифр (клики / уникальные / боты) из Keitaro.
-
-Название кампании автоматически получает префикс `test_vorobev_` (по ТЗ — `test_<фамилия>_`),
-alias для URL генерируется транслитом: `campaign1` → `test_vorobev_campaign1`.
-
----
+Название получает префикс `test_vorobev_`, alias — транслит: `campaign1` → `test_vorobev_campaign1`.
 
 ## Скриншоты
 
-Список кампаний (данные — из Keitaro API, цифры — из `/report/build`):
+| Список кампаний | Форма создания |
+|---|---|
+| ![Список](docs/screenshots/01-campaigns.png) | ![Форма](docs/screenshots/02-create-form.png) |
 
-![Список кампаний](docs/screenshots/01-campaigns.png)
-
-Форма создания (оффер — автокомплит по справочнику Keitaro, гео — ISO-коды):
-
-![Форма создания](docs/screenshots/02-create-form.png)
-
-Карточка кампании: поток «Google» с фильтром по гео и URL редиректа, поток «Offers» с весами и статистикой:
-
-![Карточка кампании](docs/screenshots/03-campaign-detail.png)
-
-Журнал обращений к API (аудит: что именно уходило в Keitaro и что вернулось):
-
-![Журнал API](docs/screenshots/04-logs.png)
-
----
+| Карточка кампании | Журнал API |
+|---|---|
+| ![Карточка](docs/screenshots/03-campaign-detail.png) | ![Журнал](docs/screenshots/04-logs.png) |
 
 ## Стек
 
-| Слой | Технологии |
-|---|---|
-| Backend | Python 3.10+, FastAPI, httpx (клиент Keitaro), SQLAlchemy 2.0, Alembic |
-| БД | SQLite по умолчанию, любой другой URL через `DATABASE_URL` (Postgres и т.п.) |
-| Frontend | Jinja2 + vanilla JS/CSS (без сборки), SPA-роутинг по hash |
-| Тесты | pytest, фейковый клиент Keitaro (без сети) |
-
----
+FastAPI + httpx + SQLAlchemy 2.0 + Alembic; SQLite по умолчанию (любой `DATABASE_URL`);
+фронт — Jinja2 + vanilla JS/CSS без сборки; тесты — pytest с фейковым Keitaro (без сети).
 
 ## Быстрый старт
 
 ```bash
-# 1. зависимости
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. настройки: скопировать шаблон и вписать свой API-ключ
-cp .env.example .env
-# KEITARO_API_KEY=<ключ из Keitaro: Профиль → API ключи>
-
-# 3. миграции
+cp .env.example .env               # вписать KEITARO_API_KEY (Профиль → API ключи)
 alembic upgrade head
-
-# 4. запуск
-python run.py                     # http://127.0.0.1:8000, автоперезагрузка включена
-# альтернатива без run.py:
-# python -m uvicorn app.main:app --reload --port 8000
+python run.py                      # http://127.0.0.1:8000, Swagger: /docs
 ```
 
-Открыть <http://127.0.0.1:8000>. Swagger со всеми эндпоинтами: <http://127.0.0.1:8000/docs>.
+`python run.py` проверяет окружение и вместо `TypeError: Router.__init__() got an unexpected keyword
+argument 'on_startup'` подсказывает, что запускать надо интерпретатором из `.venv`.
 
-> Запускайте интерпретатором из `.venv` (или после `activate`). Если взять глобальный Python
-> с несовместимым starlette, FastAPI падает на импорте с
-> `TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'` —
-> `python run.py` такую ситуацию заранее диагностирует и подсказывает команду.
-
-### Переменные окружения (`.env`)
-
-| Переменная | Назначение | Значение по умолчанию |
+| Переменная | Назначение | По умолчанию |
 |---|---|---|
 | `KEITARO_BASE_URL` | база Admin API | `https://tlgk.host/admin_api/v1` |
 | `KEITARO_API_KEY` | ключ API Keitaro | — (обязателен) |
-| `CAMPAIGN_PREFIX` | префикс названий кампаний | `test_vorobev_` |
-| `GOOGLE_URL` | куда редиректит поток №1 | `https://www.google.com/` |
-| `DEFAULT_DOMAIN_ID` | домен по умолчанию | `1813` (`kylovoa.com`) |
-| `DEFAULT_GROUP_ID` | группа по умолчанию | `9799` (`VZ adrobot test`) |
-| `DEFAULT_TRAFFIC_SOURCE_ID` | источник по умолчанию | `836` (`FORTESTS`) |
+| `CAMPAIGN_PREFIX` | префикс названий | `test_vorobev_` |
+| `GOOGLE_URL` | редирект потока №1 | `https://www.google.com/` |
+| `DEFAULT_DOMAIN_ID` / `DEFAULT_GROUP_ID` / `DEFAULT_TRAFFIC_SOURCE_ID` | домен / группа / источник | `1813` / `9799` / `836` |
 | `DATABASE_URL` | подключение к БД | `sqlite:///./keitaro_wrapper.sqlite3` |
 | `DICTIONARY_TTL_SECONDS` | TTL кэша справочников | `600` |
 
-> `.env` в git не попадает (см. `.gitignore`) — ключ API это секрет.
+`.env` и `*.sqlite3` в git не попадают.
 
----
-
-## Миграции
-
-Схема БД полностью описывается Alembic (`alembic/versions/0001_initial.py`):
+## Миграции и зачем БД
 
 ```bash
-alembic upgrade head      # применить
-alembic downgrade -1      # откатить последнюю
-alembic current           # текущая ревизия
-alembic revision --autogenerate -m "..."   # новая миграция после правки моделей
+alembic upgrade head      # применить      alembic downgrade -1   # откатить
+alembic current           # ревизия        alembic revision --autogenerate -m "..."
 ```
 
-`alembic/env.py` берёт URL из `app.config.settings`, поэтому `alembic.ini` править не нужно —
-достаточно `DATABASE_URL` в `.env`.
+`alembic/env.py` берёт URL из `app.config.settings` — `alembic.ini` править не нужно.
 
-### Зачем БД, если источник истины — Keitaro
-
-| Таблица | Содержимое |
-|---|---|
-| `campaigns` | зеркало кампаний, созданных через сервис (id Keitaro, имя, alias, гео, оффер, домен/группа/источник, ссылка) |
-| `campaign_flows` | снимок потоков кампании (`schema`, `action_type`, целевой URL, фильтры, позиция) |
-| `flow_offers` | снимок офферов потока с весами |
-| `operation_log` | журнал всех вызовов Keitaro: метод, путь, тело запроса/ответа, статус, текст ошибки |
-| `dictionary_items` | кэш справочников (офферы, домены, группы, источники) — чтобы автокомплит не дёргал API |
-
-Практический смысл: история изменений и аудит (видно, какой именно payload ушёл в Keitaro),
-работа автокомплита без лишних запросов, и возможность показать список кампаний даже при недоступном API.
-Зеркало пересинхронизируется при каждом открытии карточки кампании.
-
----
+Источник истины — Keitaro, локальная БД даёт то, чего у него нет: `campaigns` / `campaign_flows` /
+`flow_offers` (зеркало), `operation_log` (аудит: какой payload ушёл и что вернулось) и
+`dictionary_items` (кэш справочников для автокомплита).
 
 ## HTTP API
 
 | Метод | Путь | Описание |
 |---|---|---|
-| `GET` | `/api/config` | настройки UI (префикс, дефолтные id, статус подключения) |
-| `GET` | `/api/dictionaries?refresh=1` | офферы / домены / группы / источники |
-| `POST` | `/api/dictionaries` | создать группу или источник трафика (`{kind: "groups"\|"sources", name}`) |
-| `GET` | `/api/campaigns?search=&only_ours=` | список кампаний + клики/уники/боты |
-| `POST` | `/api/campaigns` | создать кампанию с двумя потоками |
-| `GET` | `/api/campaigns/{id}` | карточка кампании: потоки, офферы, статистика (включая суммы `clicks/uniques/bots` по кампании) |
-| `PUT` | `/api/campaigns/{id}/flows/{stream_id}/offers` | заменить список офферов/веса |
-| `POST` | `/api/campaigns/{id}/flows/{stream_id}/offers` | добавить оффер |
-| `DELETE` | `/api/campaigns/{id}/flows/{stream_id}/offers/{offer_id}` | удалить оффер |
-| `GET` | `/api/logs?limit=` | журнал операций |
-| `GET` | `/api/statistics` | сводка по локальному зеркалу БД |
-| `GET` | `/api/health` | статус приложения **и реальная проверка ключа** (`keitaro_ok`, `keitaro_error`, `api_key_hint`) |
-
-Пример создания кампании:
+| `GET` | `/api/health` | статус приложения + реальная проверка ключа (`keitaro_ok`, `api_key_hint`) |
+| `GET` | `/api/config` | настройки UI (префикс, дефолтные id) |
+| `GET`/`POST` | `/api/dictionaries` | справочники; создание группы или источника |
+| `GET`/`POST` | `/api/campaigns` | список (+ клики/уники/боты) и создание |
+| `GET` | `/api/campaigns/{id}` | карточка: потоки, офферы, цифры на всех уровнях |
+| `PUT`/`POST`/`DELETE` | `/api/campaigns/{id}/flows/{stream_id}/offers…` | заменить список / добавить / удалить оффер |
+| `GET` | `/api/logs`, `/api/statistics` | журнал операций и сводка по БД |
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/campaigns \
@@ -151,75 +86,24 @@ curl -X POST http://127.0.0.1:8000/api/campaigns \
   -d '{"name":"campaign1","geo":"AU","offer_id":25327}'
 ```
 
-Если Keitaro отвечает `401 Invalid API key` — см. [docs/troubleshooting.md](docs/troubleshooting.md):
-плашка в UI теперь показывает реальный статус ключа и красную полосу с текстом ошибки,
-а `/api/health` отдаёт `api_key_hint` (последние 4 символа и длина), по которому видно, какой
-именно ключ загружен — например, если в `.env` остался пример `put-your-api-key-here`.
-
-Ответ — та же структура, что отдаёт `GET /api/campaigns/{id}`: `id`, `name`, `alias`, `url`, `geo`,
-`flows[]` c `target_url`, `filters`, `offers[]`, `clicks/uniques/bots`.
-
----
-
 ## Как это работает внутри
 
 ```
-app/
-├── config.py       настройки (pydantic-settings, .env)
-├── db.py           engine + session (SQLAlchemy 2.0)
-├── models.py       таблицы (кампании, потоки, офферы, журнал, кэш справочников)
-├── keitaro.py      клиент Admin API v1: ретраи не нужны, ошибки → KeitaroError с телом ответа
-├── services.py     бизнес-логика (создание кампании, редактор офферов, статистика, журнал)
-├── schemas.py      pydantic-схемы запросов
-├── main.py         FastAPI-роуты + отдача UI
-├── templates/      index.html (Jinja2)
-└── static/         app.js, style.css
+app/{config,db,models,keitaro,services,schemas,main}.py + templates/index.html + static/{app.js,style.css}
 ```
 
-### Создание кампании (2 запроса на потоки + 1 на кампанию)
+Создание кампании — три вызова: `POST /campaigns` (`type: position`, домен/группа/источник), затем
+`POST /streams` для «Google» (`action_options.url` заполняется **явно** — без него redirect не работает,
+`filters: [{country, accept, [AU]}]`) и для «Offers» (`offers: [{offer_id, share: 100}]`).
+В обоих `collect_clicks: true`, иначе цифры всегда 0. Если потоки создать не удалось — кампания
+удаляется (`campaign.rollback`), чтобы не мусорить в общем аккаунте.
 
-```http
-POST /campaigns
-{"name":"test_vorobev_campaign1","alias":"test_vorobev_campaign1","type":"position",
- "domain_id":1813,"group_id":9799,"traffic_source_id":836,"cost_type":"CPC","cost_value":0}
+Редактор: `PUT /streams/{id}` **перезаписывает `offers[]` целиком**, поэтому добавление/удаление —
+это read-modify-write. Веса приводятся к целым процентам с суммой ровно 100 (крупнейший остаток).
+Править можно только поток со `schema: landings` (иначе 400), нельзя оставить поток без офферов.
+Занятое имя кампании (`422 Alias/Name has already used`) — один ретрай с суффиксом вместо ошибки.
 
-POST /streams
-{"campaign_id":212056,"name":"Google","type":"regular","position":1,
- "schema":"redirect","action_type":"http",
- "action_options":{"url":"https://www.google.com/"},
- "filters":[{"name":"country","mode":"accept","payload":["AU"]}],
- "collect_clicks":true}
-
-POST /streams
-{"campaign_id":212056,"name":"Offers","type":"regular","position":2,
- "schema":"landings","action_type":"http","collect_clicks":true,
- "offers":[{"offer_id":25327,"share":100}]}
-```
-
-Важные детали:
-
-* **`action_options.url` заполняется явно** — в этой сборке Keitaro `schema: redirect` без него
-  бесполезен (у многих референсных кампаний в аккаунте он `null`).
-* `type: "position"` — ротация «по позиции»: сначала поток №1 (он отсекает всех, кто не из нужной страны),
-  остальной трафик доходит до потока №2.
-* `collect_clicks: true` в обоих потоках, иначе `clicks`/`unique` в отчётах всегда 0.
-* **Откат**: если создание компании/потоков падает, недособранная кампания удаляется
-  (`DELETE /campaigns/{id}`), чтобы не мусорить в общем аккаунте. Тест на это есть.
-
-### Редактор офферов
-
-`PUT /streams/{id}` в Keitaro **перезаписывает массив `offers` целиком**, поэтому:
-
-* «добавить оффер» = прочитать текущий поток (`GET /campaigns/{id}/streams`), дописать новый и отправить `PUT`;
-* «удалить оффер» = то же самое минус один элемент;
-* веса нормализуются к целым процентам с суммой ровно 100 (пропорционально введённым значениям,
-  «крупнейший остаток»), новый оффер без веса забирает остаток, а если места нет — веса делятся поровну;
-* менять офферы можно только в потоке со `schema: landings` (в нашем случае «Offers») — иначе 400;
-* нельзя удалить последний оффер потока (Keitaro останется с пустым потоком) — тоже 400.
-
-### Цифры в UI
-
-У кампании нет статистики в `/campaigns`, поэтому используется `POST /report/build`:
+Цифры берутся из `POST /report/build`:
 
 ```json
 {"range":{"interval":"all_time"},
@@ -228,100 +112,62 @@ POST /streams
  "filters":[{"name":"campaign_id","operator":"EQUALS","expression":212056}]}
 ```
 
-`clicks` → «Клики», `campaign_unique_clicks` → «Уник.», `bots` → «Боты». Список кампаний
-получает те же метрики одним запросом с `dimensions: ["campaign_id"]` (сопоставление по id надёжнее,
-чем по имени — имена в общем аккаунте могут повторяться).
-
----
+`campaign_unique_clicks` → «Уник.» (метрики `uniques` в API нет). Список кампаний — тем же отчётом
+с `dimensions: ["campaign_id"]`; сопоставление по id, а не по имени (имена в общем аккаунте повторяются).
 
 ## Тесты
 
 ```bash
-pytest -q      # 25 тестов, сеть не нужен
+pytest -q      # 26 тестов, сеть не нужен
 ```
 
-20 тестов на бизнес-логику с фейковым Keitaro (`tests/test_services.py`) и 5 на HTTP-слой через
-`TestClient` (`tests/test_api.py`).
-
-Покрыто: создание кампании (префикс, alias, фильтр гео — в том числе несколько стран, `action_options.url`,
-100 % офферу), откат при ошибке, зеркалирование в БД, нормализация весов, добавление/удаление оффера,
-запрет дублей, удаления последнего оффера и очистки потока целиком (`offers: []`),
-запрет правки redirect-потока, валидация гео-кода и оффера,
-цифры кампании/потоков/офферов из `/report/build`, флаг «создана здесь», повторное создание
-с занятым именем (суффикс вместо ошибки), а также `/api/health` и подсказка при 401.
-
----
+20 тестов бизнес-логики на фейковом клиенте (`tests/test_services.py`) + 6 на HTTP-слой через
+`TestClient` (`tests/test_api.py`): создание кампании и откат, нормализация весов, запрет дублей и
+удаления последнего оффера, `offers: []`, правка redirect-потока, мульти-гео, цифры из отчёта,
+повтор имени с суффиксом, `/api/health` и подсказка при 401.
 
 ## Проверка «вживую»
 
-Всё создавалось в реальном аккаунте Keitaro (`https://tlgk.host/admin`) собственным API-ключом:
+Создано в реальном аккаунте своим API-ключом:
 
 | Кампания | id | Потоки |
 |---|---|---|
-| `test_vorobev_campaign1` | **212056** | Google: `redirect` → `https://www.google.com/`, фильтр `country accept ["AU"]`; Offers: 3 оффера (25327 / 24800 / 10184) |
-| `test_vorobev_campaign2_ro` | **212058** | Google: `redirect` → `https://www.google.com/`, фильтр `country accept ["RO"]`; Offers: 24800 |
+| `test_vorobev_campaign1` | **212056** | Google: `redirect` → google.com, `country accept ["AU"]`; Offers: 25327 / 24800 / 10184 |
+| `test_vorobev_campaign2_ro` | **212058** | Google: `redirect` → google.com, `country accept ["RO"]`; Offers: 24800 |
 
-Сырые ответы API, снятые после создания, лежат в репозитории:
-[`docs/campaign_212056.json`](docs/campaign_212056.json) и [`docs/streams_212056.json`](docs/streams_212056.json).
-Подробный чек-лист проверки — в [docs/verification.md](docs/verification.md).
+Сырые ответы API — [`docs/campaign_212056.json`](docs/campaign_212056.json),
+[`docs/streams_212056.json`](docs/streams_212056.json); пошаговый чек-лист, включая негативные
+сценарии — [docs/verification.md](docs/verification.md).
 
-Цифры сверены с панелью на кампании с реальным трафиком (`test_walrus_campaign1`, id 209551):
-поток «Offers» — 4 клика / 1 уник. / 3 бота, оффер `25327` — 2 / 1 / 1, и ровно то же отдаёт наш UI.
-Мульти-гео (`AU, RO`) проверен на временной кампании и затем удалён.
+Цифры сверены на кампании с реальным трафиком (209551): поток — 4/1/3, офферы 25327 — 2/1/1 и
+24800 — 2/0/2, ровно то же в UI. У своей 212056 после краулера 5/0/2 — совпадает с отчётом и панелью.
+Пробные кампании удалены (`DELETE` → 200, повторный `GET` → 404).
 
-Проверить самостоятельно:
+## Ограничения
 
-```bash
-curl -s -H "Api-Key: $KEITARO_API_KEY" \
-  "https://tlgk.host/admin_api/v1/campaigns/212056/streams" | jq
-```
-
-Пробные кампании, созданные во время разведки API, удалены (`DELETE /campaigns/{id}` → 404 при проверке),
-чтобы не засорять общий аккаунт.
-
----
-
-## Ограничения и известные нюансы
-
-* Домен `kylovoa.com` **не резолвится** из моей сети, поэтому целенаправленно кликнуть по ссылке кампании
-  не получалось: корректность проверял через API/панель Keitaro (структура потоков, фильтры, офферы, веса).
-  При этом живые запросы до кампании всё же доходят: у `test_vorobev_campaign1` (212056) накопилось
-  `5 кликов / 0 уник. / 2 бота` (краулер), и эти цифры совпадают с `POST /report/build` и с панелью.
-* Домены из UI **только выбираются**: Keitaro требует подтверждения домена по DNS, добавление — ручной шаг в панели.
-  Группу кампаний и источник трафика можно создать прямо из формы (кнопки «＋ создать»).
-* `keitaro.py` не делает автоматических ретраев: для идемпотентных `GET` это было бы полезно,
-  но `POST /campaigns` при повторе создаст дубль. Исключение — занятое имя: Keitaro отвечает
-  `422 Alias/Name has already used`, в этом случае кампания один раз пересоздаётся с суффиксом
-  (`test_vorobev_campaign1 b3f1` / alias `test_vorobev_campaign1-b3f1`), событие пишется в журнал
-  как `campaign.create.duplicate_retry`. Так двойной клик по «Создать» не ломает форму.
-* Ошибки валидации Keitaro (`400/401/403/404/422`) отдаются как `400` с текстом от Keitaro
-  (чтобы было видно, что именно не так), `502` остаётся для сетевых сбоев и 5xx Keitaro.
-* Список кампаний листается по всем страницам Admin API (`limit=300` + `offset`), поэтому поиск
-  находит и старые кампании: в общем аккаунте их уже больше 300 (иначе кампании с offset > 300
-  не попадали в поиск). Предохранитель — 10 страниц (`CAMPAIGNS_MAX_PAGES`). По умолчанию
-  чужие «test»-кампании скрыты галочкой «только наши».
-
----
+* Домен `kylovoa.com` не резолвится из моей сети — живьём клик не воспроизвести, проверял через API/панель.
+  Домены в UI только выбираются (Keitaro требует DNS-подтверждения), группу и источник можно создать из формы.
+* Ретраев нет: `POST /campaigns` при повторе создаст дубль; исключение — занятое имя (суффикс).
+* Ошибки Keitaro `400/401/403/404/422` отдаются как `400` с текстом причины, `502` — сеть и 5xx.
+* Список кампаний листается по страницам (`limit=300` + `offset`, максимум 10 страниц), чужие
+  «test»-кампании скрыты галочкой «только наши».
+* Нет авторизации на сам сервис, CI и Docker — сдавал локальный запуск, как просило ТЗ.
 
 ## Соответствие ТЗ
 
-| Требование | Где реализовано |
+| Требование | Где |
 |---|---|
-| 「создаватор」 принимает название, гео-код, ID оффера | форма «＋ Создать кампанию», `POST /api/campaigns` |
-| кампания с 2 потоками | `POST /streams` ×2: «Google» (`redirect`) и «Offers» (`landings`) |
-| поток 1 — все из указанной страны → Google | фильтр `country accept [...]` + `action_options.url` |
-| поток 2 — на выбранный оффер | `offers: [{offer_id, share: 100}]` |
-| настроенные домен, группа, источник | `domain_id`, `group_id`, `traffic_source_id` в `POST /campaigns` |
-| редактор существующей кампании: добавить/удалить оффер | карточка кампании: «＋ Добавить оффер», «Удалить», «Сохранить веса» |
-| «кнопки работают, цифры верные» | Клики / Уник. / Боты на уровне кампании, потока и оффера — из `/report/build` |
-| FastAPI + SQLAlchemy | `app/main.py`, `app/models.py`, `app/db.py`; фронт — HTML + vanilla JS |
-| README для миграций и запуска | разделы «Быстрый старт», «Миграции», «Тесты» |
+| Принимает название, гео, ID оффера | форма «＋ Создать кампанию», `POST /api/campaigns` |
+| Кампания с 2 потоками | `POST /streams` ×2: «Google» (`redirect`) + «Offers» (`landings`) |
+| Поток 1 — страна → Google | фильтр `country accept [...]` + `action_options.url` |
+| Поток 2 — на оффер | `offers: [{offer_id, share: 100}]` |
+| Домен, группа, источник | `domain_id`, `group_id`, `traffic_source_id` |
+| Редактор: добавить/удалить оффер | «＋ Добавить оффер», «Удалить», «Сохранить веса» |
+| «Кнопки работают, цифры верные» | Клики / Уник. / Боты на уровне кампании, потока и оффера |
+| FastAPI + SQLAlchemy, README | `app/*`, миграции Alembic, разделы выше |
 
----
+## AI-агенты
 
-## Как использовались AI-агенты
-
-Проект собран в паре с агентом (Cursor/Windsurf-подобный воркфлоу): агент разбирал OpenAPI-спеку Keitaro,
-перебирал payload'ы на живом API (создание/удаление пробной кампании), генерировал код и тесты,
-я проверял ответы API вручную и прогонял сценарии в браузере. Все секреты (API-ключ) — в `.env`,
-в репозиторий не попадают.
+Собрано в паре с агентом: он разбирал OpenAPI Keitaro, перебирал payload'ы на живом API (пробные
+кампании создавались и удалялись), генерировал код и тесты; ответы API и UI проверял я вручную.
+Секреты живут только в `.env`.
