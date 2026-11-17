@@ -522,6 +522,32 @@ def _stream_stats(client: KeitaroClient, campaign_id: int) -> tuple[dict, dict]:
     return per_stream, per_offer
 
 
+def _campaign_totals(client: KeitaroClient, campaign_id: int) -> dict | None:
+    """Итоги кампании из отчёта по `campaign_id`.
+
+    Именно так, а не суммой потоков: если клик не попал ни в один поток, Keitaro отдаёт его
+    со `stream_id: 0`, и при суммировании по потокам такие клики терялись бы.
+    """
+    try:
+        report = client.build_report(
+            dimensions=["campaign_id"],
+            metrics=["clicks", "campaign_unique_clicks", "bots"],
+            filters=[{"name": "campaign_id", "operator": "EQUALS", "expression": campaign_id}],
+        )
+    except KeitaroError as exc:
+        logger.warning("Итоги кампании %s недоступны: %s", campaign_id, exc.message)
+        return None
+
+    rows = report.get("rows", [])
+    own = [row for row in rows if row.get("campaign_id") in (None, campaign_id)]
+    totals = {"clicks": 0, "uniques": 0, "bots": 0}
+    for row in own:
+        totals["clicks"] += int(row.get("clicks") or 0)
+        totals["uniques"] += int(row.get("campaign_unique_clicks") or 0)
+        totals["bots"] += int(row.get("bots") or 0)
+    return totals
+
+
 def campaign_detail(session: Session, client: KeitaroClient, campaign_id: int) -> dict:
     campaign = client.get_campaign(campaign_id)
     streams = client.list_streams(campaign_id) or []
@@ -561,8 +587,12 @@ def campaign_detail(session: Session, client: KeitaroClient, campaign_id: int) -
             }
         )
     flows_view.sort(key=lambda item: item.get("position") or 0)
-    totals = {
+    totals = _campaign_totals(client, campaign_id) or {
         key: sum(int(flow.get(key) or 0) for flow in flows_view)
+        for key in ("clicks", "uniques", "bots")
+    }
+    unattributed = {
+        key: max(0, int(totals.get(key) or 0) - sum(int(flow.get(key) or 0) for flow in flows_view))
         for key in ("clicks", "uniques", "bots")
     }
 
@@ -583,6 +613,7 @@ def campaign_detail(session: Session, client: KeitaroClient, campaign_id: int) -
         "clicks": totals["clicks"],
         "uniques": totals["uniques"],
         "bots": totals["bots"],
+        "unattributed": unattributed,
         "flows": flows_view,
         "offers_catalog": [
             {"id": int(item["id"]), "name": item.get("name")} for item in get_dictionaries(session, client).get("offers", [])

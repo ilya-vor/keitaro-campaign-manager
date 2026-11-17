@@ -310,10 +310,8 @@ async function openCampaign(campaignId) {
 function renderDetail(detail) {
   const googleFlow = detail.flows.find((flow) => flow.schema === 'redirect');
   const offersFlow = detail.flows.find((flow) => flow.schema === 'landings');
-  const totals = detail.flows.reduce(
-    (acc, flow) => ({ clicks: acc.clicks + flow.clicks, uniques: acc.uniques + flow.uniques, bots: acc.bots + flow.bots }),
-    { clicks: 0, uniques: 0, bots: 0 },
-  );
+  const campaignTotals = { clicks: detail.clicks, uniques: detail.uniques, bots: detail.bots };
+  const orphanClicks = (detail.unattributed && detail.unattributed.clicks) || 0;
 
   const geoBadges = detail.geo.length
     ? detail.geo.map((code) => `<span class="badge">${esc(code)}</span>`).join(' ')
@@ -339,11 +337,12 @@ function renderDetail(detail) {
             <span>статус <b>${esc(detail.state || '—')}</b></span>
           </div>
           ${detail.url ? `<div class="meta" style="margin-top:8px">ссылка кампании: <a class="link" href="${esc(detail.url)}" target="_blank" rel="noopener">${esc(detail.url)}</a></div>` : ''}
+          ${orphanClicks > 0 ? `<div class="meta muted" style="margin-top:8px">${orphanClicks} клик. не дошли ни до одного потока (в отчёте Keitaro stream_id: 0) — учтены в итогах кампании</div>` : ''}
         </div>
         <div class="flow-stats">
-          <div><b>${totals.clicks}</b>клики</div>
-          <div><b>${totals.uniques}</b>уникальные</div>
-          <div><b>${totals.bots}</b>боты</div>
+          <div><b>${campaignTotals.clicks}</b>клики</div>
+          <div><b>${campaignTotals.uniques}</b>уникальные</div>
+          <div><b>${campaignTotals.bots}</b>боты</div>
         </div>
       </div>
     </div>

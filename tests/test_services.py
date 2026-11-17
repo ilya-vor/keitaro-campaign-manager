@@ -447,7 +447,7 @@ def test_cannot_clear_all_offers(session, client):
     assert client.streams[offers_flow["id"]]["offers"] == [{"offer_id": 25327, "share": 100}]
 
 
-def test_detail_totals_are_sum_of_flows(session, client):
+def test_detail_totals_come_from_campaign_report(session, client):
     detail = create_campaign(session, client, name="totals", geo="AU", offer_id=25327)
     add_offer(session, client, campaign_id=detail["id"], stream_id=detail["flows"][1]["id"], offer_id=24800)
     google_stream, offers_stream = detail["flows"][0]["id"], detail["flows"][1]["id"]
@@ -459,7 +459,31 @@ def test_detail_totals_are_sum_of_flows(session, client):
         ],
         "total": 2,
     }
+    client.reports[("campaign_id",)] = {
+        "rows": [{"campaign_id": detail["id"], "clicks": 12, "campaign_unique_clicks": 6, "bots": 4}],
+        "total": 1,
+    }
 
     fresh = campaign_detail(session, client, detail["id"])
     assert (fresh["clicks"], fresh["uniques"], fresh["bots"]) == (12, 6, 4)
-    assert fresh["clicks"] == sum(flow["clicks"] for flow in fresh["flows"])
+    assert fresh["unattributed"] == {"clicks": 0, "uniques": 0, "bots": 0}
+
+
+def test_detail_counts_clicks_that_missed_every_stream(session, client):
+    """Keitaro отдаёт клики без потока со stream_id: 0 — итог кампании должен их учитывать."""
+    detail = create_campaign(session, client, name="orphans", geo="AU", offer_id=25327)
+    offers_stream = detail["flows"][1]["id"]
+
+    client.reports[("stream_id",)] = {
+        "rows": [{"stream_id": offers_stream, "clicks": 2, "campaign_unique_clicks": 1, "bots": 0}],
+        "total": 1,
+    }
+    client.reports[("campaign_id",)] = {
+        "rows": [{"campaign_id": detail["id"], "clicks": 6, "campaign_unique_clicks": 1, "bots": 0}],
+        "total": 1,
+    }
+
+    fresh = campaign_detail(session, client, detail["id"])
+    assert fresh["clicks"] == 6
+    assert fresh["unattributed"]["clicks"] == 4
+    assert sum(flow["clicks"] for flow in fresh["flows"]) == 2
