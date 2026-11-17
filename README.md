@@ -66,10 +66,17 @@ cp .env.example .env
 alembic upgrade head
 
 # 4. запуск
-uvicorn app.main:app --reload --port 8000
+python run.py                     # http://127.0.0.1:8000, автоперезагрузка включена
+# альтернатива без run.py:
+# python -m uvicorn app.main:app --reload --port 8000
 ```
 
 Открыть <http://127.0.0.1:8000>. Swagger со всеми эндпоинтами: <http://127.0.0.1:8000/docs>.
+
+> Запускайте интерпретатором из `.venv` (или после `activate`). Если взять глобальный Python
+> с несовместимым starlette, FastAPI падает на импорте с
+> `TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'` —
+> `python run.py` такую ситуацию заранее диагностирует и подсказывает команду.
 
 ### Переменные окружения (`.env`)
 

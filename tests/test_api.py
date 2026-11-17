@@ -107,3 +107,9 @@ def test_campaigns_401_returns_actionable_hint(api):
     assert "Invalid API key" in detail
     assert "KEITARO_API_KEY" in detail
     assert "перезапущен" in detail
+
+
+def test_run_py_environment_check_passes_in_venv():
+    from run import check_environment
+
+    assert check_environment() == []
