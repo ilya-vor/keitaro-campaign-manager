@@ -45,9 +45,17 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
 async def keitaro_error_handler(request: Request, exc: KeitaroError) -> JSONResponse:
     # Ошибки валидации самого Keitaro (4xx) — это проблема ввода, а не шлюза.
     status_code = 400 if exc.status_code in {400, 401, 403, 404, 422} else 502
+    detail = exc.message
+    if exc.status_code == 401:
+        detail = (
+            f"{exc.message}. Keitaro отклонил ключ: проверьте KEITARO_API_KEY в .env "
+            "(без кавычек и пробелов), что ключ активен в панели (Профиль → API ключи) "
+            "и что сервер перезапущен после правки .env. Текущий ключ: "
+            f"{settings.api_key_hint}, база API: {settings.keitaro_base_url}"
+        )
     return JSONResponse(
         status_code=status_code,
-        content={"detail": exc.message, "keitaro": exc.as_dict()},
+        content={"detail": detail, "keitaro": exc.as_dict()},
     )
 
 
@@ -62,8 +70,33 @@ def index(request: Request):
 
 
 @app.get("/api/health")
-def health() -> dict:
-    return {"status": "ok", "keitaro_configured": settings.keitaro_configured}
+def health(client: KeitaroClient = Depends(get_client)) -> dict:
+    """Статус приложения + реальная проверка API-ключа (а не только «ключ не пустой»)."""
+    info: dict = {
+        "status": "ok",
+        "keitaro_configured": settings.keitaro_configured,
+        "keitaro_base_url": settings.keitaro_base_url,
+        "api_key_hint": settings.api_key_hint,
+        "api_key_is_placeholder": settings.api_key_is_placeholder,
+        "keitaro_ok": False,
+        "keitaro_error": None,
+    }
+    if not settings.keitaro_configured:
+        if settings.api_key_is_placeholder:
+            info["keitaro_error"] = (
+                "В .env остался пример ключа. Вставьте настоящий KEITARO_API_KEY "
+                "(Keitaro: Профиль → API ключи) и перезапустите сервер"
+            )
+        else:
+            info["keitaro_error"] = "KEITARO_API_KEY не задан: заполните .env и перезапустите сервер"
+        return info
+    try:
+        info["campaigns_visible"] = len(client.list_campaigns(limit=1) or [])
+        info["keitaro_ok"] = True
+    except KeitaroError as exc:
+        info["keitaro_error"] = exc.message
+        info["keitaro_status_code"] = exc.status_code
+    return info
 
 
 @app.get("/api/config")
@@ -76,6 +109,8 @@ def config() -> dict:
         "default_traffic_source_id": settings.default_traffic_source_id,
         "keitaro_configured": settings.keitaro_configured,
         "keitaro_base_url": settings.keitaro_base_url,
+        "api_key_hint": settings.api_key_hint,
+        "api_key_is_placeholder": settings.api_key_is_placeholder,
     }
 
 

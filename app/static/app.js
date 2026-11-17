@@ -44,6 +44,38 @@ async function api(path, options = {}) {
   return data;
 }
 
+/* ------------------------------------------------------------------ health */
+async function refreshHealth() {
+  const pill = $('#apiStatus');
+  const banner = $('#apiBanner');
+  pill.textContent = 'API: проверка…';
+  pill.className = 'pill pill-muted';
+  pill.title = 'нажмите, чтобы проверить ключ ещё раз';
+  try {
+    const health = await api('/api/health');
+    state.health = health;
+    if (health.keitaro_ok) {
+      pill.textContent = 'API: ok';
+      pill.className = 'pill pill-ok';
+      pill.title = `ключ ${health.api_key_hint} · ${health.keitaro_base_url}`;
+      banner.classList.add('hidden');
+      banner.textContent = '';
+    } else {
+      pill.textContent = health.keitaro_status_code ? `API: ошибка ${health.keitaro_status_code}` : 'API: не настроен';
+      pill.className = 'pill pill-err';
+      pill.title = health.keitaro_error || '';
+      banner.textContent = `Keitaro: ${health.keitaro_error || 'неизвестная ошибка'} · ключ ${health.api_key_hint} · ${health.keitaro_base_url}`;
+      banner.classList.remove('hidden');
+    }
+  } catch (error) {
+    pill.textContent = 'API: недоступен';
+    pill.className = 'pill pill-err';
+    pill.title = error.message;
+    banner.textContent = error.message;
+    banner.classList.remove('hidden');
+  }
+}
+
 /* ------------------------------------------------------------------ routing */
 function route() {
   const hash = location.hash || '#/campaigns';
@@ -71,18 +103,12 @@ function route() {
 async function init() {
   try {
     state.config = await api('/api/config');
-    const pill = $('#apiStatus');
-    if (state.config.keitaro_configured) {
-      pill.textContent = 'API подключён';
-      pill.className = 'pill pill-ok';
-    } else {
-      pill.textContent = 'API-ключ не задан';
-      pill.className = 'pill pill-err';
-    }
   } catch (error) {
-    $('#apiStatus').textContent = 'API недоступен';
-    $('#apiStatus').className = 'pill pill-err';
+    toast(error.message, 'err');
   }
+
+  await refreshHealth();
+  $('#apiStatus').addEventListener('click', refreshHealth);
 
   await loadDictionaries();
 

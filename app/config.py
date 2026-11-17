@@ -6,6 +6,16 @@ from functools import lru_cache
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Заглушки, которые нельзя считать ключом (частая причина «401 Invalid API key»).
+PLACEHOLDER_API_KEYS = {
+    "put-your-api-key-here",
+    "your-api-key",
+    "your_api_key",
+    "changeme",
+    "api-key",
+    "test",
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -36,6 +46,19 @@ class Settings(BaseSettings):
     # Кэш справочников Keitaro (офферы/домены/группы/источники) в локальной БД.
     dictionary_ttl_seconds: int = 600
 
+    @field_validator("keitaro_api_key", "keitaro_base_url", mode="before")
+    @classmethod
+    def _clean_str(cls, value):
+        """Убираем кавычки/пробелы, которые часто приезжают вместе с ключом из панели."""
+        if isinstance(value, str):
+            return value.strip().strip('"').strip("'").strip()
+        return value
+
+    @field_validator("keitaro_base_url", mode="after")
+    @classmethod
+    def _clean_base_url(cls, value: str) -> str:
+        return value.rstrip("/")
+
     @field_validator(
         "default_domain_id",
         "default_group_id",
@@ -50,7 +73,22 @@ class Settings(BaseSettings):
 
     @property
     def keitaro_configured(self) -> bool:
-        return bool(self.keitaro_api_key.strip())
+        """Ключ есть и это не заглушка из `.env.example`."""
+        key = self.keitaro_api_key.strip()
+        return bool(key) and key.lower() not in PLACEHOLDER_API_KEYS
+
+    @property
+    def api_key_is_placeholder(self) -> bool:
+        return self.keitaro_api_key.strip().lower() in PLACEHOLDER_API_KEYS
+
+    @property
+    def api_key_hint(self) -> str:
+        """Подсказка, какой ключ загружен — без полного значения (видно в /api/health)."""
+        key = self.keitaro_api_key.strip()
+        if not key:
+            return "не задан"
+        tail = key[-4:] if len(key) > 4 else ""
+        return f"…{tail} (длина {len(key)})"
 
 
 @lru_cache
