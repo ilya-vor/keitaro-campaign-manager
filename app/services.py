@@ -413,6 +413,28 @@ def _stats_by_campaign(client: KeitaroClient) -> dict[int, dict]:
     return result
 
 
+CAMPAIGNS_PAGE_SIZE = 300
+CAMPAIGNS_MAX_PAGES = 10  # предохранитель: максимум 3000 кампаний
+
+
+def _fetch_all_campaigns(client: KeitaroClient) -> list[dict]:
+    """Admin API отдаёт кампании только страницами (`limit`/`offset`), поэтому листаем,
+    пока страница не окажется неполной — иначе кампании с «дальних» страниц не находятся."""
+    rows: list[dict] = []
+    offset = 0
+    for page_number in range(1, CAMPAIGNS_MAX_PAGES + 1):
+        page = client.list_campaigns(limit=CAMPAIGNS_PAGE_SIZE, offset=offset) or []
+        rows.extend(page)
+        if len(page) < CAMPAIGNS_PAGE_SIZE:
+            return rows
+        offset += CAMPAIGNS_PAGE_SIZE
+        if page_number == CAMPAIGNS_MAX_PAGES:
+            logger.warning(
+                "Список кампаний обрезан на %s записях — дальше не листаем", len(rows)
+            )
+    return rows
+
+
 def list_campaigns(
     session: Session,
     client: KeitaroClient,
@@ -420,7 +442,7 @@ def list_campaigns(
     search: str | None = None,
     only_ours: bool = True,
 ) -> list[dict]:
-    remote = client.list_campaigns(limit=300)
+    remote = _fetch_all_campaigns(client)
     local_rows = {
         row.keitaro_id: row for row in session.scalars(select(Campaign)).all()
     }

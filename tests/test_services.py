@@ -85,7 +85,13 @@ class FakeKeitaro:
         return {"deleted": True}
 
     def list_campaigns(self, limit=None, offset=None):
-        return list(self.campaigns.values())
+        """Как настоящий API: сначала свежие, с постраничной отдачей."""
+        rows = sorted(self.campaigns.values(), key=lambda campaign: campaign["id"], reverse=True)
+        if offset:
+            rows = rows[offset:]
+        if limit is not None:
+            rows = rows[:limit]
+        return list(rows)
 
     # --- потоки
     def create_stream(self, payload):
@@ -401,3 +407,25 @@ def test_duplicate_name_retries_with_suffix(session, client):
     assert second["alias"].startswith("test_vorobev_campaign1-")
     assert len(second["alias"]) == len("test_vorobev_campaign1") + 5
     assert len(client.campaigns) == 2
+
+
+def test_list_campaigns_paginates_beyond_first_page(session, client):
+    """Кампания со второй страницы (offset=300) должна находиться поиском."""
+    ours = create_campaign(session, client, name="deep", geo="AU", offer_id=25327)
+    for index in range(305):
+        client.add_foreign_campaign(20000 + index, f"test_other_{index}")
+
+    found = list_campaigns(session, client, search="deep", only_ours=False)
+
+    assert [item["id"] for item in found] == [ours["id"]]
+
+
+def test_list_campaigns_finds_foreign_campaign_on_second_page(session, client):
+    create_campaign(session, client, name="mine", geo="AU", offer_id=25327)
+    for index in range(305):
+        client.add_foreign_campaign(30000 + index, f"test_other_{index}")
+
+    found = list_campaigns(session, client, search="test_other_3", only_ours=False)
+
+    assert found, "поиск должен видеть кампании за пределами первых 300"
+    assert all("test_other_3" in item["name"] for item in found)
