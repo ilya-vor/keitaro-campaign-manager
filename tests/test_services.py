@@ -445,3 +445,21 @@ def test_cannot_clear_all_offers(session, client):
         )
     # в Keitaro ничего не ушло — поток остался с прежним оффером
     assert client.streams[offers_flow["id"]]["offers"] == [{"offer_id": 25327, "share": 100}]
+
+
+def test_detail_totals_are_sum_of_flows(session, client):
+    detail = create_campaign(session, client, name="totals", geo="AU", offer_id=25327)
+    add_offer(session, client, campaign_id=detail["id"], stream_id=detail["flows"][1]["id"], offer_id=24800)
+    google_stream, offers_stream = detail["flows"][0]["id"], detail["flows"][1]["id"]
+
+    client.reports[("stream_id",)] = {
+        "rows": [
+            {"stream_id": google_stream, "clicks": 5, "campaign_unique_clicks": 4, "bots": 1},
+            {"stream_id": offers_stream, "clicks": 7, "campaign_unique_clicks": 2, "bots": 3},
+        ],
+        "total": 2,
+    }
+
+    fresh = campaign_detail(session, client, detail["id"])
+    assert (fresh["clicks"], fresh["uniques"], fresh["bots"]) == (12, 6, 4)
+    assert fresh["clicks"] == sum(flow["clicks"] for flow in fresh["flows"])

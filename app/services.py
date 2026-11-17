@@ -561,6 +561,10 @@ def campaign_detail(session: Session, client: KeitaroClient, campaign_id: int) -
             }
         )
     flows_view.sort(key=lambda item: item.get("position") or 0)
+    totals = {
+        key: sum(int(flow.get(key) or 0) for flow in flows_view)
+        for key in ("clicks", "uniques", "bots")
+    }
 
     return {
         "id": int(campaign["id"]),
@@ -576,6 +580,9 @@ def campaign_detail(session: Session, client: KeitaroClient, campaign_id: int) -
         "tokened_url": campaign.get("token"),
         "geo": local.geo.split(",") if local.geo else [],
         "offer_id": local.offer_id,
+        "clicks": totals["clicks"],
+        "uniques": totals["uniques"],
+        "bots": totals["bots"],
         "flows": flows_view,
         "offers_catalog": [
             {"id": int(item["id"]), "name": item.get("name")} for item in get_dictionaries(session, client).get("offers", [])
