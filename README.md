@@ -118,13 +118,7 @@ pytest -q
 | `test_vorobev_campaign1` | **212056** | Google: `redirect` → google.com, `country accept ["AU"]`; Offers: 25327 / 24800 / 10184 |
 | `test_vorobev_campaign2_ro` | **212058** | Google: `redirect` → google.com, `country accept ["RO"]`; Offers: 24800 |
 
-Сырые ответы API — [`docs/campaign_212056.json`](docs/campaign_212056.json),
-[`docs/streams_212056.json`](docs/streams_212056.json); пошаговый чек-лист, включая негативные
-сценарии — [docs/verification.md](docs/verification.md).
-
-Цифры сверены на кампании с реальным трафиком (209551): поток — 4/1/3, офферы 25327 — 2/1/1 и
-24800 — 2/0/2, ровно то же в UI. У своей 212056 после краулера 5/0/2 — совпадает с отчётом и панелью.
-Пробные кампании удалены (`DELETE` → 200, повторный `GET` → 404).
+Пошаговый чек-лист, включая негативные сценарии — [docs/verification.md](docs/verification.md).
 
 ## Ограничения
 
