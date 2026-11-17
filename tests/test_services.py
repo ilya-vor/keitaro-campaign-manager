@@ -54,6 +54,13 @@ class FakeKeitaro:
 
     # --- кампании
     def create_campaign(self, payload):
+        used_names = {campaign["name"] for campaign in self.campaigns.values()}
+        used_aliases = {campaign["alias"] for campaign in self.campaigns.values()}
+        if payload["name"] in used_names or payload["alias"] in used_aliases:
+            raise KeitaroError(
+                'HTTP 422: {"alias":["Alias has already used"],"name":["Name has already used"]}',
+                status_code=422,
+            )
         campaign_id = next(self._ids)
         campaign = {
             "id": campaign_id,
@@ -383,3 +390,14 @@ def test_detail_offers_carry_share_and_name(session, client):
     assert offers[0]["share"] == 100
     catalog = {item["id"]: item["name"] for item in detail["offers_catalog"]}
     assert catalog[25327] == "Flexacil Peru"
+
+
+def test_duplicate_name_retries_with_suffix(session, client):
+    first = create_campaign(session, client, name="campaign1", geo="AU", offer_id=25327)
+    second = create_campaign(session, client, name="campaign1", geo="AU", offer_id=25327)
+
+    assert first["id"] != second["id"]
+    assert second["name"].startswith("test_vorobev_campaign1 ")
+    assert second["alias"].startswith("test_vorobev_campaign1-")
+    assert len(second["alias"]) == len("test_vorobev_campaign1") + 5
+    assert len(client.campaigns) == 2

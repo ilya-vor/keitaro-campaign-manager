@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timedelta
 from typing import Any, Iterable
 
@@ -202,11 +203,32 @@ def create_campaign(
     try:
         campaign = client.create_campaign(campaign_payload)
     except KeitaroError as exc:
-        log_operation(
-            session, action="campaign.create", entity="campaign", method="POST", path="/campaigns",
-            status="error", request_body=campaign_payload, error=exc.message,
+        # Keitaro не разрешает одинаковые name/alias. Если пользователь создаёт кампанию
+        # с уже занятым именем — один раз пробуем с суффиксом, чтобы кнопка «Создать» работала.
+        if not (exc.status_code == 422 and "already" in (exc.message or "").lower()):
+            log_operation(
+                session, action="campaign.create", entity="campaign", method="POST", path="/campaigns",
+                status="error", request_body=campaign_payload, error=exc.message,
+            )
+            raise
+        suffix = secrets.token_hex(2)
+        campaign_payload = dict(
+            campaign_payload,
+            name=f"{campaign_name} {suffix}",
+            alias=f"{alias}-{suffix}",
         )
-        raise
+        log_operation(
+            session, action="campaign.create.duplicate_retry", entity="campaign", method="POST",
+            path="/campaigns", request_body=campaign_payload, error=exc.message,
+        )
+        try:
+            campaign = client.create_campaign(campaign_payload)
+        except KeitaroError as retry_exc:
+            log_operation(
+                session, action="campaign.create", entity="campaign", method="POST", path="/campaigns",
+                status="error", request_body=campaign_payload, error=retry_exc.message,
+            )
+            raise
 
     campaign_id = int(campaign["id"])
     log_operation(

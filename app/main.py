@@ -43,8 +43,10 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
 
 @app.exception_handler(KeitaroError)
 async def keitaro_error_handler(request: Request, exc: KeitaroError) -> JSONResponse:
+    # Ошибки валидации самого Keitaro (4xx) — это проблема ввода, а не шлюза.
+    status_code = 400 if exc.status_code in {400, 401, 403, 404, 422} else 502
     return JSONResponse(
-        status_code=502,
+        status_code=status_code,
         content={"detail": exc.message, "keitaro": exc.as_dict()},
     )
 
