@@ -429,3 +429,19 @@ def test_list_campaigns_finds_foreign_campaign_on_second_page(session, client):
 
     assert found, "поиск должен видеть кампании за пределами первых 300"
     assert all("test_other_3" in item["name"] for item in found)
+
+
+def test_cannot_clear_all_offers(session, client):
+    detail = create_campaign(session, client, name="clear", geo="AU", offer_id=25327)
+    offers_flow = next(flow for flow in detail["flows"] if flow["schema"] == "landings")
+
+    with pytest.raises(ValueError):
+        set_stream_offers(
+            session,
+            client,
+            campaign_id=detail["id"],
+            stream_id=offers_flow["id"],
+            offers=[],
+        )
+    # в Keitaro ничего не ушло — поток остался с прежним оффером
+    assert client.streams[offers_flow["id"]]["offers"] == [{"offer_id": 25327, "share": 100}]

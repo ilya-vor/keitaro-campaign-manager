@@ -608,6 +608,9 @@ def set_stream_offers(
 ) -> dict:
     """Полная замена списка офферов потока (Keitaro PUT перезаписывает массив offers)."""
     stream, _current = _resolve_offers_flow(client, campaign_id, stream_id)
+    if not offers:
+        # Иначе PUT с offers: [] молча оставит поток без офферов — трафик потечёт в никуда.
+        raise ValueError("Нельзя оставить поток без офферов — добавьте хотя бы один")
     normalized = normalize_shares(offers)
     if len(normalized) > 30:
         raise ValueError("Keitaro не позволяет больше 30 офферов в одном потоке")
