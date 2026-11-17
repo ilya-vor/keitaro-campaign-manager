@@ -10,7 +10,14 @@ from sqlalchemy.orm import sessionmaker
 from app.db import Base
 from app.keitaro import KeitaroError
 from app.models import Campaign, FlowOffer
-from app.services import add_offer, create_campaign, remove_offer, set_stream_offers
+from app.services import (
+    add_offer,
+    campaign_detail,
+    create_campaign,
+    list_campaigns,
+    remove_offer,
+    set_stream_offers,
+)
 
 
 class FakeKeitaro:
@@ -29,6 +36,8 @@ class FakeKeitaro:
             {"id": 24800, "name": "Flexacil Mexico"},
             {"id": 10184, "name": "Flexacil [JOINT]"},
         ]
+        # готовые ответы /report/build: ключ — набор dimensions
+        self.reports: dict[tuple[str, ...], dict] = {}
 
     # --- справочники
     def list_offers(self):
@@ -107,7 +116,24 @@ class FakeKeitaro:
 
     # --- отчёты
     def build_report(self, *, dimensions, metrics, filters=None, interval="all_time", sort=None):
-        return {"rows": [], "total": 0}
+        return self.reports.get(tuple(dimensions), {"rows": [], "total": 0})
+
+    # --- вспомогательное
+    def add_foreign_campaign(self, campaign_id: int, name: str) -> dict:
+        """Кампания, созданная не нашим сервисом (для проверки флага created_here)."""
+        campaign = {
+            "id": campaign_id,
+            "name": name,
+            "alias": f"foreign{campaign_id}",
+            "state": "active",
+            "domain": "https://kylovoa.com",
+            "group": "VZ",
+            "domain_id": 1813,
+            "group_id": 9799,
+            "traffic_source_id": 836,
+        }
+        self.campaigns[campaign_id] = campaign
+        return campaign
 
 
 @pytest.fixture()
@@ -289,3 +315,71 @@ def test_mirror_removes_deleted_offer_row(session, client):
 
     rows = session.scalars(select(FlowOffer)).all()
     assert [row.offer_id for row in rows] == [25327]
+
+
+def test_multiple_geo_codes_in_google_filter(session, client):
+    create_campaign(session, client, name="multigeo", geo="AU, ro;MX", offer_id=25327)
+
+    google = client.created_streams[0]
+    assert google["filters"] == [{"name": "country", "mode": "accept", "payload": ["AU", "RO", "MX"]}]
+
+
+def test_list_campaigns_uses_report_numbers_and_created_flag(session, client):
+    ours = create_campaign(session, client, name="mine", geo="AU", offer_id=25327)
+    foreign = client.add_foreign_campaign(9001, "test_ivanov_campaign1")
+
+    client.reports[("campaign_id",)] = {
+        "rows": [
+            {"campaign_id": ours["id"], "clicks": 7, "campaign_unique_clicks": 3, "bots": 1},
+            {"campaign_id": foreign["id"], "clicks": 2, "campaign_unique_clicks": 2, "bots": 0},
+        ],
+        "total": 2,
+    }
+
+    rows = {item["id"]: item for item in list_campaigns(session, client, only_ours=False)}
+
+    assert rows[ours["id"]]["created_here"] is True
+    assert rows[foreign["id"]]["created_here"] is False
+    # цифры берутся из /report/build как есть
+    assert (rows[ours["id"]]["clicks"], rows[ours["id"]]["uniques"], rows[ours["id"]]["bots"]) == (7, 3, 1)
+    assert (rows[foreign["id"]]["clicks"], rows[foreign["id"]]["uniques"], rows[foreign["id"]]["bots"]) == (2, 2, 0)
+
+
+def test_detail_shows_stats_per_flow_and_per_offer(session, client):
+    detail = create_campaign(session, client, name="stats", geo="AU", offer_id=25327)
+    add_offer(session, client, campaign_id=detail["id"], stream_id=detail["flows"][1]["id"], offer_id=24800)
+    offers_stream = detail["flows"][1]["id"]
+    google_stream = detail["flows"][0]["id"]
+
+    client.reports[("stream_id",)] = {
+        "rows": [
+            {"stream_id": google_stream, "clicks": 5, "campaign_unique_clicks": 5, "bots": 4},
+            {"stream_id": offers_stream, "clicks": 8, "campaign_unique_clicks": 2, "bots": 0},
+        ],
+        "total": 2,
+    }
+    client.reports[("stream_id", "offer_id")] = {
+        "rows": [
+            {"stream_id": offers_stream, "offer_id": 25327, "clicks": 5, "campaign_unique_clicks": 2, "bots": 0},
+            {"stream_id": offers_stream, "offer_id": 24800, "clicks": 3, "campaign_unique_clicks": 0, "bots": 0},
+        ],
+        "total": 2,
+    }
+
+    fresh = campaign_detail(session, client, detail["id"])
+    google, offers = fresh["flows"]
+
+    assert (google["clicks"], google["uniques"], google["bots"]) == (5, 5, 4)
+    assert (offers["clicks"], offers["uniques"], offers["bots"]) == (8, 2, 0)
+    stats = {offer["offer_id"]: (offer["clicks"], offer["uniques"]) for offer in offers["offers"]}
+    assert stats == {25327: (5, 2), 24800: (3, 0)}
+
+
+def test_detail_offers_carry_share_and_name(session, client):
+    detail = create_campaign(session, client, name="names", geo="AU", offer_id=25327)
+
+    offers = detail["flows"][1]["offers"]
+    assert offers[0]["name"] == "Flexacil Peru"
+    assert offers[0]["share"] == 100
+    catalog = {item["id"]: item["name"] for item in detail["offers_catalog"]}
+    assert catalog[25327] == "Flexacil Peru"

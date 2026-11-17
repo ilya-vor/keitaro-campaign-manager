@@ -370,18 +370,20 @@ def _sync_flow_offers(session: Session, flow: CampaignFlow, offers: list[dict]) 
 
 
 # --------------------------------------------------------------- чтение данных
-def _stats_by_campaign(client: KeitaroClient) -> dict[str, dict]:
+def _stats_by_campaign(client: KeitaroClient) -> dict[int, dict]:
     try:
         report = client.build_report(
-            dimensions=["campaign"],
+            dimensions=["campaign_id"],
             metrics=["clicks", "campaign_unique_clicks", "bots"],
         )
     except KeitaroError as exc:
         logger.warning("Статистика кампаний недоступна: %s", exc.message)
         return {}
-    result: dict[str, dict] = {}
+    result: dict[int, dict] = {}
     for row in report.get("rows", []):
-        result[str(row.get("campaign"))] = {
+        if row.get("campaign_id") is None:
+            continue
+        result[int(row["campaign_id"])] = {
             "clicks": int(row.get("clicks") or 0),
             "uniques": int(row.get("campaign_unique_clicks") or 0),
             "bots": int(row.get("bots") or 0),
@@ -400,6 +402,18 @@ def list_campaigns(
     local_rows = {
         row.keitaro_id: row for row in session.scalars(select(Campaign)).all()
     }
+    # «Создана здесь» — только то, что реально создал сервис (по журналу), а не просто открыли.
+    created_ids = {
+        int(entity_id)
+        for entity_id in session.scalars(
+            select(OperationLog.entity_id).where(
+                OperationLog.action == "campaign.create",
+                OperationLog.entity == "campaign",
+                OperationLog.status == "ok",
+            )
+        )
+        if entity_id and str(entity_id).isdigit()
+    }
     stats = _stats_by_campaign(client)
     prefix = settings.campaign_prefix.lower()
 
@@ -412,7 +426,7 @@ def list_campaigns(
             continue
         keitaro_id = int(campaign["id"])
         local = local_rows.get(keitaro_id)
-        counts = stats.get(name, {"clicks": 0, "uniques": 0, "bots": 0})
+        counts = stats.get(keitaro_id, {"clicks": 0, "uniques": 0, "bots": 0})
         result.append(
             {
                 "id": keitaro_id,
@@ -422,7 +436,7 @@ def list_campaigns(
                 "state": campaign.get("state"),
                 "group": campaign.get("group"),
                 "domain": campaign.get("domain"),
-                "created_here": local is not None,
+                "created_here": keitaro_id in created_ids,
                 "geo": local.geo if local else None,
                 "offer_id": local.offer_id if local else None,
                 **counts,
