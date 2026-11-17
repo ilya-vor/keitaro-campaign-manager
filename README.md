@@ -1,7 +1,7 @@
 # Keitaro Campaign Manager
 
-Веб-обёртка над **Keitaro Admin API v1**: создание трекинг-кампаний «в один клик» и редактор офферов
-существующих кампаний. Тестовое задание для позиции Fullstack (Python/Node.js).
+Веб-обёртка над **Keitaro**: создание трекинг-кампаний «в один клик» и редактор офферов
+существующих кампаний.
 
 1. **Создание кампании** — принимает название, гео-код и ID оффера, а в Keitaro создаёт кампанию и два потока:
    * «Google» — все посетители из указанной страны (`country` = `accept`) редиректятся на `https://www.google.com/`
@@ -26,7 +26,7 @@
 ## Стек
 
 FastAPI + httpx + SQLAlchemy 2.0 + Alembic; SQLite по умолчанию (любой `DATABASE_URL`);
-фронт — Jinja2 + vanilla JS/CSS без сборки; тесты — pytest с фейковым Keitaro (без сети).
+фронт — Jinja2 + vanilla JS/CSS без сборки.
 
 ## Быстрый старт
 
@@ -40,9 +40,6 @@ alembic upgrade head
 python run.py                      # http://127.0.0.1:8000, Swagger: /docs
 ```
 
-`python run.py` проверяет окружение и вместо `TypeError: Router.__init__() got an unexpected keyword
-argument 'on_startup'` подсказывает, что запускать надо интерпретатором из `.venv`.
-
 | Переменная | Назначение | По умолчанию |
 |---|---|---|
 | `KEITARO_BASE_URL` | база Admin API | `https://tlgk.host/admin_api/v1` |
@@ -52,8 +49,6 @@ argument 'on_startup'` подсказывает, что запускать на�
 | `DEFAULT_DOMAIN_ID` / `DEFAULT_GROUP_ID` / `DEFAULT_TRAFFIC_SOURCE_ID` | домен / группа / источник | `1813` / `9799` / `836` |
 | `DATABASE_URL` | подключение к БД | `sqlite:///./keitaro_wrapper.sqlite3` |
 | `DICTIONARY_TTL_SECONDS` | TTL кэша справочников | `600` |
-
-`.env` и `*.sqlite3` в git не попадают.
 
 ## Миграции и зачем БД
 
@@ -103,22 +98,10 @@ app/{config,db,models,keitaro,services,schemas,main}.py + templates/index.html +
 Править можно только поток со `schema: landings` (иначе 400), нельзя оставить поток без офферов.
 Занятое имя кампании (`422 Alias/Name has already used`) — один ретрай с суффиксом вместо ошибки.
 
-Цифры берутся из `POST /report/build`:
-
-```json
-{"range":{"interval":"all_time"},
- "dimensions":["stream_id","offer_id"],
- "metrics":["clicks","campaign_unique_clicks","bots"],
- "filters":[{"name":"campaign_id","operator":"EQUALS","expression":212056}]}
-```
-
-`campaign_unique_clicks` → «Уник.» (метрики `uniques` в API нет). Список кампаний — тем же отчётом
-с `dimensions: ["campaign_id"]`; сопоставление по id, а не по имени (имена в общем аккаунте повторяются).
-
 ## Тесты
 
 ```bash
-pytest -q      # 26 тестов, сеть не нужен
+pytest -q 
 ```
 
 20 тестов бизнес-логики на фейковом клиенте (`tests/test_services.py`) + 6 на HTTP-слой через
@@ -145,13 +128,11 @@ pytest -q      # 26 тестов, сеть не нужен
 
 ## Ограничения
 
-* Домен `kylovoa.com` не резолвится из моей сети — живьём клик не воспроизвести, проверял через API/панель.
-  Домены в UI только выбираются (Keitaro требует DNS-подтверждения), группу и источник можно создать из формы.
 * Ретраев нет: `POST /campaigns` при повторе создаст дубль; исключение — занятое имя (суффикс).
 * Ошибки Keitaro `400/401/403/404/422` отдаются как `400` с текстом причины, `502` — сеть и 5xx.
 * Список кампаний листается по страницам (`limit=300` + `offset`, максимум 10 страниц), чужие
   «test»-кампании скрыты галочкой «только наши».
-* Нет авторизации на сам сервис, CI и Docker — сдавал локальный запуск, как просило ТЗ.
+* Нет авторизации на сам сервис, CI и Docker, как просило ТЗ.
 
 ## Соответствие ТЗ
 
